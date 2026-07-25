@@ -7,8 +7,20 @@ assert_true grep -q 'service install|upgrade|start|stop|restart|status' <<<"$hel
 assert_true sh -n "$DIR/rs-manager.sh"
 make_root; trap cleanup_root EXIT; export RS_STATE_DIR="$RS_ROOT/etc/rs-manager" RS_SINGBOX_CONFIG="$RS_ROOT/etc/sing-box/config.json" RS_REALM_CONFIG="$RS_ROOT/root/.realm/config.toml" RS_SYSCTL_FILE="$RS_ROOT/etc/sysctl.d/99-rs-manager.conf" RS_BACKUP_DIR="$RS_ROOT/backups"
 bash "$DIR/bin/rs" singbox list >/dev/null; bash "$DIR/bin/rs" realm list >/dev/null; bash "$DIR/bin/rs" tune status >/dev/null
-sb_menu=$(printf '0\n' | bash "$DIR/bin/rs" singbox menu); assert_true grep -q 'clone' <<<"$sb_menu"
-realm_menu=$(printf '0\n' | bash "$DIR/bin/rs" realm menu); assert_true grep -q 'edit' <<<"$realm_menu"
+sb_menu=$(printf '0\n' | bash "$DIR/bin/rs" singbox menu); assert_true grep -Fq $'Sing-box \xe7\xae\xa1\xe7\x90\x86' <<<"$sb_menu"
+assert_true grep -Fq $'5. \xe5\x85\x8b\xe9\x9a\x86\xe5\x85\xa5\xe7\xab\x99' <<<"$sb_menu"
+realm_menu=$(printf '0\n' | bash "$DIR/bin/rs" realm menu); assert_true grep -Fq $'Realm \xe7\xae\xa1\xe7\x90\x86' <<<"$realm_menu"
+assert_true grep -Fq $'3. \xe7\xbc\x96\xe8\xbe\x91\xe8\xa7\x84\xe5\x88\x99' <<<"$realm_menu"
+cn_menu=$(printf '0\n' | bash "$DIR/bin/rs")
+assert_true grep -Fq $'RS Manager \xe4\xb8\x80\xe9\x94\xae\xe7\xae\xa1\xe7\x90\x86\xe8\x84\x9a\xe6\x9c\xac' <<<"$cn_menu"
+assert_true grep -Fq $'BBR/TCP \xe6\x99\xba\xe8\x83\xbd\xe8\xb0\x83\xe4\xbc\x98' <<<"$cn_menu"
+rm -f "$RS_SYSCTL_FILE"
+tune_declined=$(printf '3\n2\nn\n0\n' | bash "$DIR/bin/rs" 2>&1)
+assert_true grep -q '^kernel=' <<<"$tune_declined"
+assert_true grep -q 'tcp_congestion_control = bbr' <<<"$tune_declined"
+assert_false test -e "$RS_SYSCTL_FILE"
+printf '3\n2\ny\n0\n' | bash "$DIR/bin/rs" >/dev/null
+assert_true test -s "$RS_SYSCTL_FILE"
 cat >"$RS_ROOT/etc/os-release" <<'EOF'
 ID=alpine
 EOF

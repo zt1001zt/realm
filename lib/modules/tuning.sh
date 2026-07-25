@@ -105,3 +105,12 @@ _rs_tune_restore(){
 }
 rs_tune_restore(){ rs_locked_call _rs_tune_restore "$@"; }
 rs_tune_status(){ printf 'kernel=%s\n' "$(uname -r)"; sysctl net.ipv4.tcp_available_congestion_control net.ipv4.tcp_congestion_control net.core.default_qdisc 2>/dev/null||true; }
+rs_tune_smart_preview(){
+ printf '%s\n' '智能检测结果：'
+ rs_tune_status
+ printf 'memory_kb=%s\n' "$(awk '/MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null || true)"
+ printf 'nofile=%s\n' "$(ulimit -n)"
+ rs_tune_check_support || return 1
+ printf '%s\n' '将应用以下 BBR/TCP 参数：'
+ rs_tune_preview standard
+}
