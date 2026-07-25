@@ -33,7 +33,7 @@ chmod +x "$RS_ROOT/test-bin/rc-service"
 PATH="$RS_ROOT/test-bin:$PATH" bash "$DIR/bin/rs" service status realm
 assert_eq "$(cat "$RS_ROOT/rc-service.log")" 'realm status'
 mkdir -p "$RS_ROOT/menu-bin"
-cp "$DIR/../tools/jq.exe" "$RS_ROOT/menu-bin/jq.exe"
+ln -s "$(command -v jq)" "$RS_ROOT/menu-bin/jq"
 cat >"$RS_ROOT/menu-install-hook" <<EOF
 #!/usr/bin/env sh
 printf '%s\n' "\$1" >"$RS_ROOT/menu-install.log"
