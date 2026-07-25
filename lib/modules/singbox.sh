@@ -7,7 +7,10 @@ rs_sb_uuid(){ cat /proc/sys/kernel/random/uuid 2>/dev/null || printf '%s-%s-%s-%
 rs_sb_tag(){ local key tag i=0; key=$(rs_sb_type_key "$1") || return 1; while ((i<100)); do tag="rs-$key-$(rs_random_hex 3)"; if [[ ! -s $RS_SINGBOX_CONFIG ]] || ! jq -e --arg t "$tag" '.inbounds[]?|select(.tag==$t)' "$RS_SINGBOX_CONFIG" >/dev/null; then printf '%s\n' "$tag"; return 0; fi; i=$((i+1)); done; return 1; }
 rs_sb_reality_keypair(){
  local output private public
- command -v sing-box >/dev/null 2>&1 || { rs_die 'sing-box is required to generate Reality keys'; return 1; }
+ command -v sing-box >/dev/null 2>&1 || {
+  rs_die 'sing-box is not installed; run: rs service install sing-box'
+  return 1
+ }
  output=$(sing-box generate reality-keypair 2>/dev/null) || return 1
  private=$(awk -F': *' 'tolower($1) ~ /private/ {print $2; exit}' <<<"$output")
  public=$(awk -F': *' 'tolower($1) ~ /public/ {print $2; exit}' <<<"$output")
