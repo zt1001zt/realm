@@ -5,16 +5,16 @@ RS Manager 把 Realm 转发、Sing-box 多协议实例和可恢复的 BBR/TCP �
 ## 一键安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zt1001zt/realm/v1.0.0/rs-manager.sh | sh
+curl -fsSL https://raw.githubusercontent.com/zt1001zt/realm/v1.0.1/rs-manager.sh | sh
 ```
 
 Alpine（默认自带 BusyBox `wget`）也可以使用：
 
 ```sh
-wget -qO- https://raw.githubusercontent.com/zt1001zt/realm/v1.0.0/rs-manager.sh | sh
+wget -qO- https://raw.githubusercontent.com/zt1001zt/realm/v1.0.1/rs-manager.sh | sh
 ```
 
-引导脚本只下载固定的 `v1.0.0` Release 包，并使用脚本内置的独立 SHA-256 摘要校验；摘要不匹配时会直接终止，不会覆盖现有安装。
+引导脚本只下载固定的 `v1.0.1` Release 包，并使用脚本内置的独立 SHA-256 摘要校验；摘要不匹配时会直接终止，不会覆盖现有安装。
 
 脚本安装后会进入菜单。首次使用可选择 `Services` → `install/upgrade all`，或执行 `rs service install all`，安装经过固定 SHA-256 校验的 Sing-box 与 Realm 官方二进制及 systemd/OpenRC 服务。已有二进制、配置和服务文件在变更前会备份，启动或健康检查失败会回滚。
 

@@ -15,6 +15,7 @@ mkdir -p "$WORK/$BUNDLE" "$(dirname "$OUTPUT")"
 for item in install.sh realm.sh THIRD_PARTY_NOTICES.md checksums.txt bin lib; do
   cp -a "$ROOT/$item" "$WORK/$BUNDLE/"
 done
+find "$WORK/$BUNDLE" -type f -exec sed -i 's/\r$//' {} +
 find "$WORK/$BUNDLE" -type d -exec chmod 0755 {} +
 find "$WORK/$BUNDLE" -type f -exec chmod 0644 {} +
 chmod 0755 "$WORK/$BUNDLE/install.sh" "$WORK/$BUNDLE/realm.sh" "$WORK/$BUNDLE/bin/rs"
