@@ -50,7 +50,7 @@ jobs:
           - image: alpine:3.21
             setup: apk add --no-cache bash coreutils curl findutils git grep iproute2 jq openssl python3 py3-tomli sed tar
           - image: rockylinux:9
-            setup: dnf install -y bash findutils git grep iproute jq openssl python3.11 sed tar gzip
+            setup: dnf install -y bash diffutils findutils git grep iproute jq openssl python3.11 sed tar gzip && ln -sf /usr/bin/python3.11 /usr/local/bin/python3
     steps:
       - uses: actions/checkout@v4
       - name: Run shell tests in ${{ matrix.image }}
