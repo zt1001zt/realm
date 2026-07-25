@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+rs_diag_redact(){ sed -E 's/([Pp]assword|UUID|uuid|private_key|token|secret)([=:][[:space:]]*)[^[:space:]",]+/\1\2REDACTED/g; s#(://)[^/@:]+(:[^/@]+)?@#\1REDACTED@#g'; }
+rs_diag_run(){ echo '=== RS Manager Diagnostics ==='; command -v sing-box >/dev/null 2>&1&&sing-box version|head -n1||echo 'sing-box: not installed'; command -v realm >/dev/null 2>&1&&realm --version 2>/dev/null|head -n1||echo 'realm: not installed'; rs_tune_status; [[ -f ${RS_SINGBOX_CONFIG:-/etc/sing-box/config.json} ]]&&jq empty "${RS_SINGBOX_CONFIG:-/etc/sing-box/config.json}"&&echo 'sing-box config: valid'||true; }

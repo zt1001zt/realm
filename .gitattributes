@@ -1,0 +1,6 @@
+*.sh text eol=lf
+bin/rs text eol=lf
+checksums.txt text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf

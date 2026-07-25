@@ -1,0 +1,8 @@
+[network]
+no_tcp = false
+use_udp = true
+
+# existing comment
+[[endpoints]]
+listen = "[::]:10000"
+remote = "old.example.com:20000"

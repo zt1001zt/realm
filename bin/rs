@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [[ -d "$SELF_DIR/../lib/core" ]]; then RS_LIB_DIR=$(cd "$SELF_DIR/.."&&pwd); else RS_LIB_DIR=${RS_LIB_DIR:-/usr/local/lib/rs-manager}; fi
+source "$RS_LIB_DIR/lib/core/common.sh"; source "$RS_LIB_DIR/lib/core/system.sh"; source "$RS_LIB_DIR/lib/core/validation.sh"; source "$RS_LIB_DIR/lib/core/service.sh"; source "$RS_LIB_DIR/lib/core/transaction.sh"; source "$RS_LIB_DIR/lib/core/state.sh"
+source "$RS_LIB_DIR/lib/modules/singbox.sh"; source "$RS_LIB_DIR/lib/modules/realm.sh"; source "$RS_LIB_DIR/lib/modules/tuning.sh"; source "$RS_LIB_DIR/lib/modules/diagnostics.sh"
+: "${RS_STATE_DIR:=$(rs_path /etc/rs-manager)}"; : "${RS_BACKUP_DIR:=$(rs_path /var/lib/rs-manager/backups)}"; : "${RS_SINGBOX_CONFIG:=$(rs_path /etc/sing-box/config.json)}"; : "${RS_REALM_CONFIG:=$(rs_path /root/.realm/config.toml)}"; : "${RS_SYSCTL_FILE:=$(rs_path /etc/sysctl.d/99-rs-manager.conf)}"
+usage(){ cat <<'EOF'
+RS Manager - Sing-box + Realm + BBR/TCP
+Usage:
+  rs
+  rs singbox list|add|delete|clone|link
+  rs realm list|add|edit|delete|range|disable|enable
+  rs tune status|preview|apply|realm|restore
+  rs diagnose
+  rs legacy-realm
+EOF
+}
+singbox_cmd(){ local action=${1:-menu}; shift||true; case $action in list)rs_sb_list;;add)rs_sb_add "${1:?type}" "${2:?name}" "${3:?port}";;delete)rs_sb_delete "${1:?tag}";;clone)rs_sb_clone "${1:?tag}" "${2:?name}" "${3:?port}";;link)rs_sb_link "${1:?tag}" "${2:?host}";;menu)singbox_menu;;*)usage;return 1;;esac; }
+realm_cmd(){ local action=${1:-menu};shift||true;case $action in list)rs_realm_list;;add)rs_realm_add "${1:?id}" "${2:?listen}" "${3:?host:port}";;edit)rs_realm_edit "${1:?id}" "${2:?listen}" "${3:?host:port}";;delete)rs_realm_delete "${1:?id}";;range)rs_realm_add_range "${1:?start}" "${2:?end}" "${3:?host}" "${4:?remote-start}";;disable)rs_realm_toggle "${1:?id}" disabled;;enable)rs_realm_toggle "${1:?id}" enabled;;menu)realm_menu;;*)usage;return 1;;esac; }
+tune_cmd(){ local action=${1:-status};shift||true;case $action in status)rs_tune_status;;preview)rs_tune_preview "${1:-standard}";;apply)rs_tune_apply "${1:-standard}";;realm)rs_tune_realm;;restore)rs_tune_restore;;*)usage;return 1;;esac; }
+singbox_menu(){ while true;do printf '\nSing-box: 1=list 2=add 3=delete 4=link 0=back\n';read -r -p 'Select: ' c;case $c in 1)rs_sb_list;;2)read -r -p 'Type (ss/hy2/tuic/vless/anytls): ' t;read -r -p 'Name: ' n;read -r -p 'Port: ' p;rs_sb_add "$t" "$n" "$p";;3)read -r -p 'Tag: ' t;rs_sb_delete "$t";;4)read -r -p 'Tag: ' t;read -r -p 'Host: ' h;rs_sb_link "$t" "$h";;0)return;;esac;done; }
+realm_menu(){ while true;do printf '\nRealm: 1=list 2=add 3=delete 4=legacy-manager 0=back\n';read -r -p 'Select: ' c;case $c in 1)rs_realm_list;;2)read -r -p 'Rule ID: ' i;read -r -p 'Listen port: ' p;read -r -p 'Target host:port: ' r;rs_realm_add "$i" "$p" "$r";;3)read -r -p 'Rule ID: ' i;rs_realm_delete "$i";;4)bash "$RS_LIB_DIR/realm.sh";;0)return;;esac;done; }
+main_menu(){ while true;do printf '\nRS Manager: 1=Sing-box 2=Realm 3=Tuning 4=Diagnose 5=Legacy-Realm 0=Exit\n';read -r -p 'Select: ' c;case $c in 1)singbox_menu;;2)realm_menu;;3)printf '1=status 2=apply-standard 3=realm-tune 4=restore\n';read -r t;case $t in 1)rs_tune_status;;2)rs_tune_preview standard;read -r -p 'Apply? [y/N] ' y;[[ $y =~ ^[Yy]$ ]]&&rs_tune_apply standard;;3)rs_tune_realm;;4)rs_tune_restore;;esac;;4)rs_diag_run|rs_diag_redact;;5)bash "$RS_LIB_DIR/realm.sh";;0)exit 0;;esac;done; }
+case ${1:-} in --help|-h|help)usage;;singbox)shift;singbox_cmd "$@";;realm)shift;realm_cmd "$@";;tune)shift;tune_cmd "$@";;diagnose)rs_diag_run|rs_diag_redact;;legacy-realm)bash "$RS_LIB_DIR/realm.sh";;'')main_menu;;*)usage;exit 1;;esac

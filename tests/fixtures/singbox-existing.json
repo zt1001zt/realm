@@ -1,0 +1,8 @@
+{
+  "log":{"level":"warn"},
+  "dns":{"servers":[{"tag":"custom","address":"1.1.1.1"}]},
+  "inbounds":[{"type":"shadowsocks","tag":"legacy-ss","listen":"::","listen_port":12000,"method":"aes-128-gcm","password":"legacy-pass"}],
+  "outbounds":[{"type":"direct","tag":"direct"}],
+  "route":{"rules":[{"action":"sniff"}]},
+  "experimental":{"cache_file":{"enabled":true}}
+}

@@ -1,3 +1,59 @@
+# RS Manager：Realm + Sing-box + BBR/TCP 一键管理
+
+RS Manager 把 Realm 转发、Sing-box 多协议实例和可恢复的 BBR/TCP 调优整合为一个命令行工具，同时保留原 `realm.sh` 与 `sb` 使用习惯。
+
+## 一键安装
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/wcwq99/realm/main/rs-manager.sh)
+```
+
+安装完成后：
+
+```bash
+rs                 # 统一管理菜单
+sb                 # 直接进入 Sing-box 管理
+rs --help          # 查看非交互命令
+```
+
+## 主要能力
+
+- 首次没有选择的 SS、Hysteria2、TUIC、VLESS Reality、AnyTLS Reality，可在安装后继续添加。
+- 同一种协议可创建多个独立实例，使用唯一 Tag、端口和凭据。
+- 修改配置时保留已有 DNS、路由、出站和未知自定义字段。
+- Realm 支持稳定 ID 的添加、编辑、启停、删除和连续端口段。
+- BBR/`fq` 提供低内存、标准、高带宽三档配置；只写入管理器自己的 sysctl 文件并可恢复。
+- 支持 Debian/Ubuntu、CentOS/RHEL/Rocky/AlmaLinux 和 Alpine，兼容 systemd 与 OpenRC。
+- 配置修改前自动备份，候选配置校验后原子替换。
+
+## 常用命令
+
+```bash
+rs singbox list
+rs singbox add hy2 hy-main 24443
+rs singbox add vless reality-main 34443
+rs singbox link rs-hy2-ab12 example.com
+rs realm add edge-1 443 target.example.com:8443
+rs realm range 10000 10010 target.example.com 20000
+rs tune preview standard
+rs tune apply standard
+rs tune restore
+rs diagnose
+```
+
+> BBR/TCP 调优不会自动换内核、重启 VPS、修改防火墙、SSH 或 DNS。修改内核前应确认服务商支持并准备控制台救援方式。
+
+## 无损迁移
+
+RS Manager 直接读取 `/etc/sing-box/config.json` 和 `/root/.realm/config.toml`。旧 Sing-box 的 `.protocols` 布尔标记不再决定哪些协议可以管理；实际入站配置才是数据源。无法识别的自定义配置保持不变。
+
+## 卸载
+
+删除 RS Manager 默认不会删除 Sing-box、Realm、证书或原生配置。服务卸载仍可通过原 Realm 管理入口或发行版包管理器单独执行。
+
+---
+
+## 原 Realm 脚本说明
 ## Realm 一键转发脚本
 
 参考自 https://www.nodeseek.com/post-183613-1 ，感谢原教程作者。
