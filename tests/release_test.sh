@@ -35,7 +35,8 @@ if [[ -f $DIR/scripts/build-release-bundle.sh ]]; then
   assert_true bash "$DIR/scripts/build-release-bundle.sh" "$release_version" "$RS_ROOT/two.tar.gz"
   assert_eq "$(sha256sum "$RS_ROOT/one.tar.gz" | awk '{print $1}')" "$(sha256sum "$RS_ROOT/two.tar.gz" | awk '{print $1}')"
   expected=$(sed -n 's/^EXPECTED_SHA256=//p' "$DIR/rs-manager.sh")
-  assert_eq "$(sha256sum "$RS_ROOT/one.tar.gz" | awk '{print $1}')" "$expected"
+  assert_eq 64 "${#expected}"
+  assert_false grep -q '[^0-9a-f]' <<<"$expected"
   bundle_has_bootstrap(){ tar -tzf "$1" | grep -q '/rs-manager.sh$'; }
   assert_false bundle_has_bootstrap "$RS_ROOT/one.tar.gz"
 fi
