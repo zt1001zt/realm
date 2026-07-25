@@ -12,7 +12,7 @@ release_version=$(sed -n 's/^VERSION=//p' "$DIR/rs-manager.sh")
 
 while read -r expected entry; do
   path=${entry#\*}
-  actual=$(git -C "$DIR" cat-file blob "HEAD:$path" | sha256sum | awk '{print $1}')
+  actual=$(git -c safe.directory="$DIR" -C "$DIR" cat-file blob "HEAD:$path" | sha256sum | awk '{print $1}')
   assert_eq "$actual" "$expected"
 done <"$DIR/checksums.txt"
 

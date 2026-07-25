@@ -4,7 +4,7 @@ set -eu
 REPO=${RS_REPO:-zt1001zt/realm}
 VERSION=1.0.2
 REF=${RS_REF:-v$VERSION}
-EXPECTED_SHA256=c4fcf0d63f55a3362aade3aff8ec3c83f688ef0aa11344ab810aaeb385052a99
+EXPECTED_SHA256=6d03127a506ece7d397a4aae2d8fcabf7021430e784f9ee684a8e677cadc9396
 if [ "$REF" != "v$VERSION" ]; then
   [ -n "${RS_BUNDLE_SHA256:-}" ] || { echo 'RS_BUNDLE_SHA256 is required with a custom RS_REF' >&2; exit 1; }
   VERSION=${REF#v}
