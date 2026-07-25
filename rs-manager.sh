@@ -2,7 +2,7 @@
 set -eu
 
 REPO=${RS_REPO:-zt1001zt/realm}
-VERSION=1.0.2
+VERSION=1.0.3
 REF=${RS_REF:-v$VERSION}
 EXPECTED_SHA256=6d03127a506ece7d397a4aae2d8fcabf7021430e784f9ee684a8e677cadc9396
 if [ "$REF" != "v$VERSION" ]; then
