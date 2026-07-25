@@ -5,8 +5,18 @@ RS Manager 把 Realm 转发、Sing-box 多协议实例和可恢复的 BBR/TCP �
 ## 一键安装
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/wcwq99/realm/main/rs-manager.sh)
+curl -fsSL https://raw.githubusercontent.com/zt1001zt/realm/v1.0.0/rs-manager.sh | sh
 ```
+
+Alpine（默认自带 BusyBox `wget`）也可以使用：
+
+```sh
+wget -qO- https://raw.githubusercontent.com/zt1001zt/realm/v1.0.0/rs-manager.sh | sh
+```
+
+引导脚本只下载固定的 `v1.0.0` Release 包，并使用脚本内置的独立 SHA-256 摘要校验；摘要不匹配时会直接终止，不会覆盖现有安装。
+
+脚本安装后会进入菜单。首次使用可选择 `Services` → `install/upgrade all`，或执行 `rs service install all`，安装经过固定 SHA-256 校验的 Sing-box 与 Realm 官方二进制及 systemd/OpenRC 服务。已有二进制、配置和服务文件在变更前会备份，启动或健康检查失败会回滚。
 
 安装完成后：
 
@@ -22,6 +32,7 @@ rs --help          # 查看非交互命令
 - 同一种协议可创建多个独立实例，使用唯一 Tag、端口和凭据。
 - 修改配置时保留已有 DNS、路由、出站和未知自定义字段。
 - Realm 支持稳定 ID 的添加、编辑、启停、删除和连续端口段。
+- 可安装、升级、启动、停止、重启并检查 Sing-box/Realm 服务。
 - BBR/`fq` 提供低内存、标准、高带宽三档配置；只写入管理器自己的 sysctl 文件并可恢复。
 - 支持 Debian/Ubuntu、CentOS/RHEL/Rocky/AlmaLinux 和 Alpine，兼容 systemd 与 OpenRC。
 - 配置修改前自动备份，候选配置校验后原子替换。
@@ -30,6 +41,8 @@ rs --help          # 查看非交互命令
 
 ```bash
 rs singbox list
+rs service install all
+rs service status all
 rs singbox add hy2 hy-main 24443
 rs singbox add vless reality-main 34443
 rs singbox link rs-hy2-ab12 example.com
@@ -45,7 +58,7 @@ rs diagnose
 
 ## 无损迁移
 
-RS Manager 直接读取 `/etc/sing-box/config.json` 和 `/root/.realm/config.toml`。旧 Sing-box 的 `.protocols` 布尔标记不再决定哪些协议可以管理；实际入站配置才是数据源。无法识别的自定义配置保持不变。
+RS Manager 直接读取 `/etc/sing-box/config.json` 和 `/root/.realm/config.toml`。旧 Sing-box 的 `.protocols` 布尔标记不再决定哪些协议可以管理；实际入站配置才是数据源。已有 Sing-box 入站会登记为旧实例，已有 Realm endpoint 会添加稳定的 `legacy-*` 标记。DNS、路由、出站、其他 TOML 段和无法识别的自定义内容保持不变。
 
 ## 卸载
 

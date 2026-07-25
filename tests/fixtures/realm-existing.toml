@@ -6,3 +6,5 @@ use_udp = true
 [[endpoints]]
 listen = "[::]:10000"
 remote = "old.example.com:20000"
+[custom]
+keep = "yes"

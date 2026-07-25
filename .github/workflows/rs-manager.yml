@@ -11,11 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install shell dependencies
-        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck python3
       - name: Run shell tests
         run: bash tests/run.sh
       - name: Run ShellCheck
-        run: shellcheck -x -e SC1090,SC1091,SC2015,SC2016,SC2119 install.sh rs-manager.sh bin/rs lib/core/*.sh lib/modules/*.sh tests/*.sh
+        run: shellcheck -x -e SC1090,SC1091,SC2015,SC2016,SC2119 install.sh rs-manager.sh bin/rs lib/core/*.sh lib/modules/*.sh scripts/*.sh tests/*.sh
       - name: Verify bundle checksums
         run: sha256sum -c checksums.txt
 
@@ -31,3 +31,20 @@ jobs:
           go-version: 1.23.4
           cache-dependency-path: web/go.sum
       - run: go test ./...
+
+  compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: alpine:3.21
+            setup: apk add --no-cache bash coreutils curl findutils grep iproute2 jq openssl python3 py3-tomli sed tar
+          - image: rockylinux:9
+            setup: dnf install -y bash coreutils curl findutils grep iproute jq openssl python3.11 sed tar gzip
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shell tests in ${{ matrix.image }}
+        run: >-
+          docker run --rm -v "$PWD:/src" "${{ matrix.image }}" sh -c
+          '${{ matrix.setup }} && cd /src && bash tests/run.sh'

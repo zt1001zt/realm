@@ -3,7 +3,7 @@ set -euo pipefail
 export PATH="/usr/bin:/bin:$PATH"
 DIR=$(cd "$(dirname "$0")/.." && pwd)
 export PATH="$DIR/../tools:$PATH"
-for test in core transaction singbox realm tuning diagnostics cli; do
+for test in core transaction singbox realm tuning diagnostics deployment cli release; do
   echo "== $test =="
   bash "$DIR/tests/${test}_test.sh"
 done

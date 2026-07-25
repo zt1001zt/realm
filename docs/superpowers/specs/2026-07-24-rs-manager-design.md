@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-24
 
-**Status:** Approved for implementation planning
+**Status:** v1.0 implementation scope recorded; later sections also retain post-v1 design targets
 
 ## 1. Purpose
 
@@ -10,7 +10,7 @@ Build a one-command, command-line-only VPS manager that combines the useful capa
 
 The first release must solve the current Sing-box lifecycle limitation: protocols omitted during initial installation must be addable later without reinstalling or replacing the existing configuration. The same design may also support multiple independent instances of one protocol.
 
-The project will use `wcwq99/realm` as the integration base. The existing Realm script remains available for compatibility while the new unified command is introduced as `rs`.
+The project uses `zt1001zt/realm` as the published integration repository. The existing Realm script remains available for compatibility while the new unified command is introduced as `rs`.
 
 ## 2. Supported Environments
 
@@ -31,7 +31,11 @@ The installer creates:
 - `/usr/local/bin/rs` as the unified entry point.
 - `/usr/local/bin/sb` as a compatibility shortcut to the Sing-box submenu.
 
-The `rs` main menu contains Sing-box management, Realm forwarding management, BBR/TCP tuning, diagnostics, backup and migration, and manager updates.
+The v1 `rs` main menu contains Sing-box management, Realm forwarding management, BBR/TCP tuning, basic diagnostics, migration, and service control.
+
+### v1.0 Scope Boundary
+
+The broader descriptions below are the target architecture, not a claim that every item ships in v1.0. Manager self-update commands, named snapshot/restore UI, full log and firewall diagnostics, credential regeneration, automated repair, and uninstall workflows are explicitly deferred until after v1.0. The v1 installer itself is rollback-safe when reinstalling or updating from a verified release bundle; automatic update orchestration is not yet exposed in `rs`.
 
 ## 4. Project Structure
 
@@ -144,7 +148,7 @@ CentOS/RHEL and Alpine use their current kernel's supported congestion control. 
 
 Manager sysctl settings live only in `/etc/sysctl.d/99-rs-manager.conf`. Existing `/etc/sysctl.conf` and unrelated sysctl files are not edited. Restore removes or replaces only manager-owned settings and reapplies captured previous runtime values where possible.
 
-TCP profile sizes are bounded by physical memory. `fq` is applied only to the active default-route interface. MSS clamping is not enabled by default and is offered only when diagnostics indicate a forwarding or MTU problem.
+TCP profile sizes use conservative fixed bounds. v1 writes `net.core.default_qdisc=fq`, which affects newly created interfaces/qdiscs; it deliberately does not replace the qdisc already attached to the active interface because an exact reversible hierarchy restore is not portable. MSS clamping is not enabled by default.
 
 Realm-specific tuning must not force IPv4-only listeners or transform Realm TOML. It may manage connection tracking, service file-descriptor limits, and conservative keepalive values through manager-owned files.
 
@@ -197,15 +201,16 @@ The first release includes:
 - Unified `rs` command and `sb` compatibility command.
 - Five managed Sing-box protocols with post-install addition and optional multi-instance support.
 - Existing Sing-box and Realm configuration migration.
-- Realm single-rule and range management with optional Sing-box assistance.
+- Realm single-rule, range, and enable/disable management.
 - Transactional backup, validation, health check, and rollback.
-- BBR/`fq`, three TCP profiles, Realm-specific tuning, preview, and restore.
-- Unified diagnostics, service control, and manager self-update.
+- BBR plus a default-`fq` setting, three TCP profiles, Realm-specific tuning, preview, and restore.
+- Basic redacted diagnostics and service control. Manager self-update commands are post-v1.
 - Debian/Ubuntu, CentOS/RHEL-compatible distributions, and Alpine support through systemd or OpenRC.
 
 The first release excludes:
 
 - Web management.
+- Named snapshot/restore UI, full log/firewall reports, credential regeneration, automated repair, and uninstall commands.
 - Subscription hosting, accounts, traffic billing, quotas, and expiration automation.
 - Automatic VPS reboot.
 - Unconfirmed firewall, SSH, DNS, or kernel changes.

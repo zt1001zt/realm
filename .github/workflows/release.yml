@@ -9,42 +9,26 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build and Release
+  release:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: web/go.mod
-          cache-dependency-path: web/go.sum
-
-      - name: Build amd64
-        working-directory: web
+      - name: Build deterministic manager bundle
+        shell: bash
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -trimpath -ldflags="-s -w" -o realm_web .
-          zip ../realm-panel-linux-amd64.zip \
-            realm_web config.toml \
-            -r static templates
+          version="${GITHUB_REF_NAME#v}"
+          bash scripts/build-release-bundle.sh "$version" "rs-manager-$version.tar.gz"
+          sha256sum "rs-manager-$version.tar.gz" >"rs-manager-$version.tar.gz.sha256"
+          expected=$(sed -n 's/^EXPECTED_SHA256=//p' rs-manager.sh)
+          actual=$(sha256sum "rs-manager-$version.tar.gz" | awk '{print $1}')
+          test "$actual" = "$expected"
 
-      - name: Build arm64
-        working-directory: web
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-            go build -trimpath -ldflags="-s -w" -o realm_web .
-          zip ../realm-panel-linux-arm64.zip \
-            realm_web config.toml \
-            -r static templates
-
-      - name: Create Release
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            realm-panel-linux-amd64.zip
-            realm-panel-linux-arm64.zip
+            rs-manager-*.tar.gz
+            rs-manager-*.tar.gz.sha256
           generate_release_notes: true
