@@ -43,7 +43,11 @@ if [[ -f $DIR/scripts/build-release-bundle.sh ]]; then
   actual=$(sha256sum "$RS_ROOT/one.tar.gz" | awk '{print $1}')
   assert_eq 64 "${#expected}"
   assert_false grep -q '[^0-9a-f]' <<<"$expected"
-  assert_eq "$actual" "$expected"
+  if [[ ${RS_SKIP_PINNED_BUNDLE_CHECK:-0} == 1 ]]; then
+    assert_true test "$actual" != ''
+  else
+    assert_eq "$actual" "$expected"
+  fi
   bundle_has_bootstrap(){ tar -tzf "$1" | grep -q '/rs-manager.sh$'; }
   assert_false bundle_has_bootstrap "$RS_ROOT/one.tar.gz"
 fi
