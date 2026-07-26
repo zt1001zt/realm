@@ -39,10 +39,13 @@ cat >"$RS_ROOT/menu-install-hook" <<EOF
 printf '%s\n' "\$1" >"$RS_ROOT/menu-install.log"
 EOF
 chmod +x "$RS_ROOT/menu-install-hook"
-printf '2\ny\nss\nmenu-test\n23456\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_MENU_INSTALL_HOOK="$RS_ROOT/menu-install-hook" bash "$DIR/bin/rs" singbox menu >/dev/null
+menu_add_output=$(printf '2\ny\n1\nmenu-test\n23456\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_SB_HOST_OVERRIDE=198.51.100.20 RS_MENU_INSTALL_HOOK="$RS_ROOT/menu-install-hook" bash "$DIR/bin/rs" singbox menu)
 hook_component=$(cat "$RS_ROOT/menu-install.log" 2>/dev/null || true)
 assert_eq "$hook_component" sing-box
 assert_true jq -e '.inbounds[]|select(.type=="shadowsocks" and .listen_port==23456)' "$RS_SINGBOX_CONFIG"
+assert_true grep -Eq 'ss://[^@]+@198\.51\.100\.20:23456#' <<<"$menu_add_output"
+invalid_protocol_output=$(printf '2\ny\n9\n0\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_MENU_INSTALL_HOOK="$RS_ROOT/menu-install-hook" bash "$DIR/bin/rs" singbox menu 2>&1)
+assert_true grep -Fq '无效的协议选项' <<<"$invalid_protocol_output"
 refusal_warning=$'\xe8\xaf\xb7\xe5\x85\x88\xe5\xae\x89\xe8\xa3\x85\xef\xbc\x9ars service install sing-box'
 refusal_output=$(printf '2\nn\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" bash "$DIR/bin/rs" singbox menu 2>&1)
 assert_true grep -Fq "$refusal_warning" <<<"$refusal_output"
@@ -57,6 +60,14 @@ assert_true grep -Fq "$install_failure_warning" <<<"$install_failure_output"
 rm -f "$RS_ROOT/menu-install.log"
 PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_MENU_INSTALL_HOOK="$RS_ROOT/menu-install-hook" bash "$DIR/bin/rs" singbox add ss cli-test 23457 >/dev/null
 assert_false test -e "$RS_ROOT/menu-install.log"
+assert_eq "$(jq '[.inbounds[]|select(.type=="shadowsocks")]|length' "$RS_SINGBOX_CONFIG")" 2
+view_output=$(printf '1\n1\n0\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_SB_HOST_OVERRIDE=198.51.100.20 bash "$DIR/bin/rs" singbox menu)
+assert_true grep -Fq '名称：menu-test' <<<"$view_output"
+assert_true grep -Fq '端口：23456' <<<"$view_output"
+assert_true grep -Fq '分享链接：' <<<"$view_output"
+assert_true grep -Eq 'ss://[^@]+@198\.51\.100\.20:23456#' <<<"$view_output"
+manual_host_output=$(printf '1\n1\nmanual.example.com\n0\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_SB_DISABLE_HOST_DETECT=1 bash "$DIR/bin/rs" singbox menu)
+assert_true grep -q '@manual\.example\.com:23456#' <<<"$manual_host_output"
 prefix="$RS_ROOT/install"; RS_PREFIX="$prefix" RS_SKIP_DEPS=1 bash "$DIR/install.sh"; assert_true test -x "$prefix/bin/rs"; assert_true test -x "$prefix/bin/sb"
 assert_eq "$(cat "$prefix/lib/rs-manager/.rs-manager-install" 2>/dev/null || true)" RS_MANAGER_INSTALL_V1
 mkdir -p "$RS_ROOT/etc/sing-box" "$RS_ROOT/root/.realm" "$RS_ROOT/etc/rs-manager" "$RS_ROOT/backups" "$(dirname "$RS_SYSCTL_FILE")"

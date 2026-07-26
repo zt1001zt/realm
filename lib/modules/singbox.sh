@@ -120,6 +120,7 @@ rs_sb_uri_host(){ local host=${1#[}; host=${host%]}; rs_sb_validate_host "$host"
 rs_sb_detect_host(){
  local line host service
  if [[ -n ${RS_SB_HOST_OVERRIDE:-} ]]; then rs_sb_validate_host "$RS_SB_HOST_OVERRIDE" && printf '%s\n' "${RS_SB_HOST_OVERRIDE#[}" | sed 's/]$//'; return; fi
+ [[ ${RS_SB_DISABLE_HOST_DETECT:-0} != 1 ]] || return 1
  while IFS= read -r line; do host=$(awk '{print $4}' <<<"$line"); host=${host%%/*}; if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi; done < <(ip -o -4 addr show scope global 2>/dev/null || true)
  while IFS= read -r line; do host=$(awk '{print $4}' <<<"$line"); host=${host%%/*}; if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi; done < <(ip -o -6 addr show scope global 2>/dev/null || true)
  for service in https://api.ipify.org https://ifconfig.me/ip; do

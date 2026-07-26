@@ -31,7 +31,83 @@ menu_ensure_component(){
  if [[ -n ${RS_MENU_INSTALL_HOOK:-} ]]; then "$RS_MENU_INSTALL_HOOK" "$component"; else rs_component_install "$component"; fi || { rs_warn "${label} 安装失败，已取消当前操作"; return 1; }
 }
 
-singbox_menu(){ while true;do printf '\nSing-box 管理\n1. 查看配置\n2. 添加入站\n3. 编辑入站\n4. 删除入站\n5. 克隆入站\n6. 生成分享链接\n0. 返回\n';read -r -p '请选择: ' c;case $c in 1)rs_sb_list;;2)menu_ensure_component sing-box 'Sing-box'||continue;read -r -p '协议类型 (ss/hy2/tuic/vless/anytls): ' t;read -r -p '名称: ' n;read -r -p '端口: ' p;rs_sb_add "$t" "$n" "$p"||rs_warn '添加失败';;3)read -r -p '标签: ' t;read -r -p '字段 (port/sni): ' f;read -r -p '值: ' v;rs_sb_edit "$t" "$f" "$v"||rs_warn '编辑失败';;4)read -r -p '标签: ' t;rs_sb_delete "$t"||rs_warn '删除失败';;5)menu_ensure_component sing-box 'Sing-box'||continue;read -r -p '源标签: ' t;read -r -p '新名称: ' n;read -r -p '新端口: ' p;rs_sb_clone "$t" "$n" "$p"||rs_warn '克隆失败';;6)read -r -p '标签: ' t;read -r -p '服务器地址: ' h;rs_sb_link "$t" "$h"||rs_warn '链接生成失败';;0)return;;esac;done; }
+menu_select_sb_type(){
+ local choice
+ while true; do
+  printf '\n请选择协议：\n1. Shadowsocks\n2. Hysteria2\n3. TUIC\n4. VLESS Reality\n5. AnyTLS Reality\n0. 返回\n'
+  read -r -p '请选择: ' choice
+  case $choice in
+   1)MENU_SB_TYPE=ss;return 0;; 2)MENU_SB_TYPE=hy2;return 0;; 3)MENU_SB_TYPE=tuic;return 0;;
+   4)MENU_SB_TYPE=vless;return 0;; 5)MENU_SB_TYPE=anytls;return 0;; 0)return 2;;
+   *)rs_warn '无效的协议选项，请重新选择';;
+  esac
+ done
+}
+menu_resolve_sb_host(){
+ local host
+ if host=$(rs_sb_detect_host 2>/dev/null); then MENU_SB_HOST=$host; printf '服务器地址：%s\n' "$host"; return 0; fi
+ read -r -p '无法自动检测公网地址，请输入服务器域名或 IP: ' host
+ rs_sb_validate_host "$host" || { rs_warn '服务器地址格式无效'; return 1; }
+ MENU_SB_HOST=${host#[}; MENU_SB_HOST=${MENU_SB_HOST%]}
+}
+menu_print_sb_link(){
+ local tag=$1 uri
+ menu_resolve_sb_host || return 1
+ if uri=$(rs_sb_link "$tag" "$MENU_SB_HOST"); then printf '分享链接：\n%s\n' "$uri"; return 0; fi
+ return 1
+}
+singbox_view_menu(){
+ local -a tags=() types=() ports=()
+ local tag type port name choice detail key value
+ while true; do
+  tags=(); types=(); ports=()
+  while IFS=$'\t' read -r tag type port; do [[ -n $tag ]] || continue; tags+=("$tag"); types+=("$type"); ports+=("$port"); done < <(rs_sb_list)
+  ((${#tags[@]})) || { printf '暂无 Sing-box 配置。\n'; return 0; }
+  printf '\nSing-box 配置列表\n'
+  for ((choice=0;choice<${#tags[@]};choice++)); do
+   name=$(rs_state_get ".singbox.instances[\"${tags[$choice]}\"].name" 2>/dev/null || true); [[ -n $name ]] || name=${tags[$choice]}
+   printf '%d. %s | %s | %s 端口 | Tag: %s\n' "$((choice+1))" "$name" "${types[$choice]}" "${ports[$choice]}" "${tags[$choice]}"
+  done
+  printf '0. 返回\n'; read -r -p '请选择配置: ' choice
+  [[ $choice == 0 ]] && return 0
+  [[ $choice =~ ^[0-9]+$ ]] && ((choice>=1 && choice<=${#tags[@]})) || { rs_warn '无效的配置编号'; continue; }
+  tag=${tags[$((choice-1))]}
+  detail=$(rs_sb_detail "$tag") || { rs_warn '读取配置详情失败'; continue; }
+  printf '\n配置详情\n'
+  while IFS=$'\t' read -r key value; do
+   case $key in name)printf '名称：%s\n' "$value";;type)printf '协议：%s\n' "$value";;tag)printf 'Tag：%s\n' "$value";;
+    listen)printf '监听地址：%s\n' "$value";;port)printf '端口：%s\n' "$value";;sni)printf 'SNI：%s\n' "$value";;
+    reality_public_key)printf 'Reality 公钥：%s\n' "$value";;esac
+  done <<<"$detail"
+  menu_print_sb_link "$tag" || rs_warn '配置存在，但分享链接生成失败'
+ done
+}
+singbox_add_menu(){
+ local n p tag select_rc
+ menu_ensure_component sing-box 'Sing-box' || return 1
+ if menu_select_sb_type; then :; else select_rc=$?; [[ $select_rc == 2 ]] && return 0; return 1; fi
+ read -r -p '名称: ' n; read -r -p '端口: ' p
+ if tag=$(rs_sb_add "$MENU_SB_TYPE" "$n" "$p"); then
+  printf '添加成功，实例 Tag：%s\n' "$tag"
+  menu_print_sb_link "$tag" || rs_warn "协议已创建，但分享链接生成失败；实例 Tag：$tag"
+ else rs_warn '添加失败'; return 1
+ fi
+}
+singbox_menu(){
+ local c t f v n p
+ while true; do
+  printf '\nSing-box 管理\n1. 查看配置与分享链接\n2. 添加入站\n3. 编辑入站\n4. 删除入站\n5. 克隆入站\n6. 生成分享链接\n0. 返回\n'
+  read -r -p '请选择: ' c
+  case $c in
+   1)singbox_view_menu;;2)singbox_add_menu||true;;
+   3)read -r -p '标签: ' t;read -r -p '字段 (port/sni): ' f;read -r -p '值: ' v;rs_sb_edit "$t" "$f" "$v"||rs_warn '编辑失败';;
+   4)read -r -p '标签: ' t;rs_sb_delete "$t"||rs_warn '删除失败';;
+   5)menu_ensure_component sing-box 'Sing-box'||continue;read -r -p '源标签: ' t;read -r -p '新名称: ' n;read -r -p '新端口: ' p;rs_sb_clone "$t" "$n" "$p"||rs_warn '克隆失败';;
+   6)read -r -p '标签: ' t;menu_print_sb_link "$t"||rs_warn '链接生成失败';;
+   0)return;;*)rs_warn '无效选项，请重新选择';;
+  esac
+ done
+}
 realm_menu(){ while true;do printf '\nRealm 管理\n1. 查看规则\n2. 添加规则\n3. 编辑规则\n4. 删除规则\n5. 添加端口段\n6. 禁用规则\n7. 启用规则\n8. 旧版管理器\n0. 返回\n';read -r -p '请选择: ' c;case $c in 1)rs_realm_list;;2)read -r -p '规则 ID: ' i;read -r -p '监听端口: ' p;read -r -p '目标地址:端口: ' r;rs_realm_add "$i" "$p" "$r"||rs_warn '添加失败';;3)read -r -p '规则 ID: ' i;read -r -p '监听端口: ' p;read -r -p '目标地址:端口: ' r;rs_realm_edit "$i" "$p" "$r"||rs_warn '编辑失败';;4)read -r -p '规则 ID: ' i;rs_realm_delete "$i"||rs_warn '删除失败';;5)read -r -p '起始端口: ' a;read -r -p '结束端口: ' b;read -r -p '目标地址: ' h;read -r -p '目标起始端口: ' p;rs_realm_add_range "$a" "$b" "$h" "$p"||rs_warn '端口段添加失败';;6)read -r -p '规则 ID: ' i;rs_realm_toggle "$i" disabled||rs_warn '禁用失败';;7)read -r -p '规则 ID: ' i;rs_realm_toggle "$i" enabled||rs_warn '启用失败';;8)bash "$RS_LIB_DIR/realm.sh";;0)return;;esac;done; }
 service_menu(){ local a c; printf '\n服务管理\n1. 安装/升级全部\n2. 启动全部\n3. 重启全部\n4. 查看全部状态\n0. 返回\n'; read -r -p '请选择: ' c; case $c in 1)a=install;;2)a=start;;3)a=restart;;4)a=status;;0)return;;*)return 1;;esac; service_cmd "$a" all; }
 manager_uninstall_menu(){ local answer; printf '\n将只删除 RS Manager 程序，保留 Sing-box、Realm、服务、配置、状态、备份和调优。\n'; read -r -p '确认卸载 RS Manager？ [y/N] ' answer; [[ $answer =~ ^[Yy]$ ]] || { printf '已取消卸载。\n'; return 1; }; rs_manager_uninstall "${RS_PREFIX:-/usr/local}"; }
