@@ -73,15 +73,20 @@ assert_false rs_sb_validate_host '1::2::3'
 assert_false rs_sb_validate_host 'abcd:'
 assert_false rs_sb_validate_host '[8.8.8.8'
 assert_false rs_sb_validate_host '8.8.8.8]'
+assert_false rs_sb_validate_host '[8.8.8.8]'
+assert_false rs_sb_validate_host '[example.com]'
 assert_false rs_sb_validate_host '01.2.3.4'
 assert_false rs_sb_validate_host '1.2.3'
 assert_false rs_sb_validate_host '1.2.3.4.5'
 assert_true rs_sb_validate_host '::ffff:8.8.8.8'
+assert_false rs_sb_validate_host '2001:4860::1%eth0'
 assert_false rs_sb_host_public 192.0.2.1
 assert_false rs_sb_host_public 198.51.100.20
 assert_false rs_sb_host_public 203.0.113.10
 assert_false rs_sb_host_public ff02::1
 assert_false rs_sb_host_public 0:0:0:0:0:0:0:0
+assert_false rs_sb_host_public fec0::1
+assert_false rs_sb_host_public fed0::1
 assert_eq "$(rs_sb_uri_host '2001:4860:4860::8888')" '[2001:4860:4860::8888]'
 sslink=$(rs_sb_link legacy-ss 2001:4860:4860::8888)
 assert_true grep -Eq '^ss://[^@]+@\[2001:4860:4860::8888\]:12000#' <<<"$sslink"

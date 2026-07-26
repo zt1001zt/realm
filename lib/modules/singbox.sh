@@ -85,10 +85,10 @@ rs_sb_urlencode(){ local value; value=$(tr -d '\r\n'); printf '%s' "$value" | jq
 rs_sb_normalize_host(){
  local host=${1:-}
  case $host in
-  \[*\])host=${host:1:${#host}-2};;
+  \[*\])host=${host:1:${#host}-2}; [[ $host == *:* ]] || return 1;;
   *'['*|*']'*)return 1;;
  esac
- [[ -n $host ]] || return 1
+ [[ -n $host && $host != *%* ]] || return 1
  printf '%s\n' "$host"
 }
 rs_sb_ip_version(){ "${RS_PYTHON3:-python3}" -c 'import ipaddress,sys; print(ipaddress.ip_address(sys.argv[1]).version)' "$1" 2>/dev/null; }
@@ -104,7 +104,7 @@ rs_sb_validate_host(){
 rs_sb_host_public(){
  local host
  host=$(rs_sb_normalize_host "${1:-}") || return 1
- "${RS_PYTHON3:-python3}" -c 'import ipaddress,sys; value=ipaddress.ip_address(sys.argv[1]); raise SystemExit(0 if value.is_global and not value.is_multicast else 1)' "$host" 2>/dev/null
+ "${RS_PYTHON3:-python3}" -c 'import ipaddress,sys; value=ipaddress.ip_address(sys.argv[1]); raise SystemExit(0 if value.is_global and not value.is_multicast and not getattr(value,"is_site_local",False) else 1)' "$host" 2>/dev/null
 }
 rs_sb_uri_host(){ local host; rs_sb_validate_host "${1:-}" || return 1; host=$(rs_sb_normalize_host "$1") || return 1; if [[ $host == *:* ]]; then printf '[%s]\n' "$host"; else printf '%s\n' "$host"; fi; }
 rs_sb_detect_host(){
