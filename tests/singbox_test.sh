@@ -40,10 +40,10 @@ rs_sb_migrate
 assert_eq "$(rs_state_get '.singbox.instances["legacy-ss"].type')" shadowsocks
 assert_eq "$(rs_state_get '.singbox.instances["legacy-reality"].public_key')" rVvTl7AF2U722w9YH9XkJs80U87Mt1fOBDTtg-bFh3E
 assert_true grep -q 'pbk=rVvTl7AF2U722w9YH9XkJs80U87Mt1fOBDTtg-bFh3E' <<<"$(rs_sb_link legacy-reality example.com)"
-hy=$(rs_sb_add hysteria2 hy-main 13000); vl=$(rs_sb_add vless reality-main 14000); ss2=$(rs_sb_add shadowsocks ss-two 15000)
+hy=$(rs_sb_add hysteria2 hy-main 13000); vl=$(rs_sb_add vless reality-main 14000); ss2=$(rs_sb_add shadowsocks ss-two 15000); tu=$(rs_sb_add tuic tu-main 15001); at=$(rs_sb_add anytls any-main 15002)
 assert_true test -s "$RS_SINGBOX_CERT_DIR/fullchain.pem"
 assert_true test -s "$RS_SINGBOX_CERT_DIR/privkey.pem"
-assert_eq "$(jq '.inbounds|length' "$RS_SINGBOX_CONFIG")" 5
+assert_eq "$(jq '.inbounds|length' "$RS_SINGBOX_CONFIG")" 7
 assert_eq "$(jq -r '.dns.servers[0].tag' "$RS_SINGBOX_CONFIG")" custom
 assert_eq "$(jq -r '.experimental.cache_file.enabled' "$RS_SINGBOX_CONFIG")" true
 assert_true test "$hy" != "$vl"
@@ -65,6 +65,36 @@ assert_false rs_sb_link "$vl" example.com
 rs_state_set ".singbox.instances[\"$vl\"].public_key" "$saved_public"
 hlink=$(rs_sb_link "$hy" example.com)
 assert_false grep -q '%0A\|%0D' <<< "$hlink"
+assert_true rs_sb_validate_host example.com
+assert_true rs_sb_validate_host 8.8.8.8
+assert_true rs_sb_validate_host 2001:4860:4860::8888
+assert_false rs_sb_validate_host 'bad host'
+assert_eq "$(rs_sb_uri_host '2001:4860:4860::8888')" '[2001:4860:4860::8888]'
+sslink=$(rs_sb_link legacy-ss 2001:4860:4860::8888)
+assert_true grep -Eq '^ss://[^@]+@\[2001:4860:4860::8888\]:12000#' <<<"$sslink"
+ss_user=${sslink#ss://}; ss_user=${ss_user%%@*}
+assert_false grep -q '[+/=]' <<<"$ss_user"
+assert_true grep -Eq '^hy2://.+@example\.com:13000/' <<<"$hlink"
+tlink=$(rs_sb_link "$tu" example.com)
+assert_true grep -Eq '^tuic://[^:]+:.+@example\.com:15001/' <<<"$tlink"
+alink=$(rs_sb_link "$at" example.com)
+assert_true grep -q '^anytls://.*pbk=TEST_PUBLIC_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456' <<<"$alink"
+assert_false rs_sb_link "$hy" 'bad host'
+detail=$(rs_sb_detail "$vl")
+assert_true grep -Fq $'name\treality-main' <<<"$detail"
+assert_true grep -Fq $'type\tvless' <<<"$detail"
+assert_true grep -Fq $'port\t14000' <<<"$detail"
+ip(){ printf '%s\n' '2: eth0    inet 8.8.4.4/24 brd 8.8.4.255 scope global eth0'; }
+curl(){ printf '%s\n' 1.1.1.1; }
+assert_eq "$(rs_sb_detect_host)" 8.8.4.4
+ip(){ case "$*" in *'-4'*) printf '%s\n' '2: eth0    inet 10.0.0.2/24 scope global eth0';; *'-6'*) printf '%s\n' '2: eth0    inet6 2001:4860:4860::8844/64 scope global';; esac; }
+assert_eq "$(rs_sb_detect_host)" 2001:4860:4860::8844
+ip(){ printf '%s\n' '2: eth0    inet 10.0.0.2/24 scope global eth0'; }
+curl(){ printf '%s\n' 9.9.9.9; }
+assert_eq "$(rs_sb_detect_host)" 9.9.9.9
+ip(){ return 1; }
+curl(){ return 1; }
+assert_false rs_sb_detect_host
 cat >"$RS_ROOT/etc/os-release" <<'EOF'
 ID=alpine
 EOF

@@ -82,15 +82,76 @@ _rs_sb_migrate(){
 }
 rs_sb_migrate(){ rs_locked_call _rs_sb_migrate "$@"; }
 rs_sb_urlencode(){ local value; value=$(tr -d '\r\n'); printf '%s' "$value" | jq -sRr @uri | tr -d '\r\n'; }
+rs_sb_validate_host(){
+ local host=${1:-} part n
+ host=${host#[}; host=${host%]}
+ [[ -n $host && $host != *[[:space:]]* ]] || return 1
+ if [[ $host =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  IFS=. read -r -a parts <<<"$host"; ((${#parts[@]}==4)) || return 1
+  for part in "${parts[@]}"; do [[ $part =~ ^[0-9]{1,3}$ ]] || return 1; n=$((10#$part)); ((n<=255)) || return 1; done
+  return 0
+ fi
+ if [[ $host == *:* ]]; then
+  [[ $host =~ ^[0-9A-Fa-f:]+$ && $host != : && $host != :::* ]] || return 1
+  return 0
+ fi
+ [[ ${#host} -le 253 && $host =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && $host == *.* ]] || return 1
+ local label
+ IFS=. read -r -a labels <<<"$host"
+ for label in "${labels[@]}"; do [[ -n $label && ${#label} -le 63 && $label != -* && $label != *- ]] || return 1; done
+}
+rs_sb_host_public(){
+ local host a b
+ host=${1#[}; host=${host%]}
+ rs_sb_validate_host "$host" || return 1
+ if [[ $host =~ ^([0-9]+)\.([0-9]+)\. ]]; then
+  a=${BASH_REMATCH[1]}; b=${BASH_REMATCH[2]}
+  ((a!=0 && a!=10 && a!=127 && a<224)) || return 1
+  ! ((a==100 && b>=64 && b<=127)) || return 1
+  ! ((a==169 && b==254)) || return 1
+  ! ((a==172 && b>=16 && b<=31)) || return 1
+  ! ((a==192 && b==168)) || return 1
+  return 0
+ fi
+ local lower=${host,,}
+ [[ $lower != :: && $lower != ::1 && $lower != fe8* && $lower != fe9* && $lower != fea* && $lower != feb* && $lower != fc* && $lower != fd* ]]
+}
+rs_sb_uri_host(){ local host=${1#[}; host=${host%]}; rs_sb_validate_host "$host" || return 1; if [[ $host == *:* ]]; then printf '[%s]\n' "$host"; else printf '%s\n' "$host"; fi; }
+rs_sb_detect_host(){
+ local line host service
+ if [[ -n ${RS_SB_HOST_OVERRIDE:-} ]]; then rs_sb_validate_host "$RS_SB_HOST_OVERRIDE" && printf '%s\n' "${RS_SB_HOST_OVERRIDE#[}" | sed 's/]$//'; return; fi
+ while IFS= read -r line; do host=$(awk '{print $4}' <<<"$line"); host=${host%%/*}; if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi; done < <(ip -o -4 addr show scope global 2>/dev/null || true)
+ while IFS= read -r line; do host=$(awk '{print $4}' <<<"$line"); host=${host%%/*}; if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi; done < <(ip -o -6 addr show scope global 2>/dev/null || true)
+ for service in https://api.ipify.org https://ifconfig.me/ip; do
+  host=$(curl -4 -fsS --connect-timeout 2 --max-time 4 "$service" 2>/dev/null | tr -d '\r\n' || true)
+  if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi
+ done
+ return 1
+}
+rs_sb_detail(){
+ local tag=$1 row name type listen port sni public
+ row=$(jq -c --arg t "$tag" '.inbounds[]?|select(.tag==$t)' "$RS_SINGBOX_CONFIG") || return 1
+ [[ -n $row ]] || return 1
+ name=$(rs_state_get ".singbox.instances[\"$tag\"].name" 2>/dev/null || true); [[ -n $name ]] || name=$tag
+ type=$(jq -r '.type' <<<"$row"); listen=$(jq -r '.listen // "::"' <<<"$row"); port=$(jq -r '.listen_port' <<<"$row")
+ sni=$(jq -r '.tls.server_name // ""' <<<"$row"); public=$(rs_state_get ".singbox.instances[\"$tag\"].public_key" 2>/dev/null || true)
+ printf 'name\t%s\ntype\t%s\ntag\t%s\nlisten\t%s\nport\t%s\n' "$name" "$type" "$tag" "$listen" "$port"
+ [[ -z $sni ]] || printf 'sni\t%s\n' "$sni"
+ if [[ $type == vless || $type == anytls ]]; then
+  if [[ $public =~ ^[A-Za-z0-9_-]{32,64}$ ]]; then printf 'reality_public_key\t%s\n' "$public"; else printf 'reality_public_key\tunavailable\n'; fi
+ fi
+}
 rs_sb_link(){
- local tag=$1 host=$2 row type port public sid password
+ local tag=$1 host=$2 row type port public sid password label sni
+ rs_sb_validate_host "$host" || { rs_die 'Invalid server host'; return 1; }
+ host=$(rs_sb_uri_host "$host") || return 1
  row=$(jq -c --arg t "$tag" '.inbounds[]|select(.tag==$t)' "$RS_SINGBOX_CONFIG") || return 1; [[ -n $row ]] || return 1
- type=$(jq -r .type <<< "$row"); port=$(jq -r .listen_port <<< "$row")
+ type=$(jq -r .type <<< "$row"); port=$(jq -r .listen_port <<< "$row"); label=$(printf '%s' "$tag"|rs_sb_urlencode)
  case $type in
-  shadowsocks) local method encoded; method=$(jq -r .method<<<"$row"); password=$(jq -r .password<<<"$row"); encoded=$(printf '%s' "$method:$password"|base64|tr -d '\n'); printf 'ss://%s@%s:%s#%s\n' "$encoded" "$host" "$port" "$tag" ;;
-  hysteria2) password=$(jq -r '.users[0].password'<<<"$row"|rs_sb_urlencode); printf 'hy2://%s@%s:%s/?insecure=1#%s\n' "$password" "$host" "$port" "$tag" ;;
-  tuic) password=$(jq -r '.users[0].password'<<<"$row"|rs_sb_urlencode); printf 'tuic://%s:%s@%s:%s/?congestion_control=bbr&insecure=1#%s\n' "$(jq -r '.users[0].uuid'<<<"$row")" "$password" "$host" "$port" "$tag" ;;
-  vless) public=$(rs_state_get ".singbox.instances[\"$tag\"].public_key"); [[ $public =~ ^[A-Za-z0-9_-]{32,64}$ ]] || { rs_die 'Reality public key is unavailable for this instance'; return 1; }; sid=$(jq -r '.tls.reality.short_id[0]'<<<"$row"); printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s#%s\n' "$(jq -r '.users[0].uuid'<<<"$row")" "$host" "$port" "$(jq -r '.tls.server_name'<<<"$row")" "$public" "$sid" "$tag" ;;
-  anytls) public=$(rs_state_get ".singbox.instances[\"$tag\"].public_key"); [[ $public =~ ^[A-Za-z0-9_-]{32,64}$ ]] || { rs_die 'Reality public key is unavailable for this instance'; return 1; }; sid=$(jq -r '.tls.reality.short_id[0]'<<<"$row"); password=$(jq -r '.users[0].password'<<<"$row"|rs_sb_urlencode); printf 'anytls://%s@%s:%s/?security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s#%s\n' "$password" "$host" "$port" "$(jq -r '.tls.server_name'<<<"$row")" "$public" "$sid" "$tag" ;;
+  shadowsocks) local method encoded; method=$(jq -r .method<<<"$row"); password=$(jq -r .password<<<"$row"); encoded=$(printf '%s' "$method:$password"|base64|tr '+/' '-_'|tr -d '=\r\n'); printf 'ss://%s@%s:%s#%s\n' "$encoded" "$host" "$port" "$label" ;;
+  hysteria2) password=$(jq -r '.users[0].password'<<<"$row"|rs_sb_urlencode); printf 'hy2://%s@%s:%s/?insecure=1#%s\n' "$password" "$host" "$port" "$label" ;;
+  tuic) password=$(jq -r '.users[0].password'<<<"$row"|rs_sb_urlencode); printf 'tuic://%s:%s@%s:%s/?congestion_control=bbr&insecure=1#%s\n' "$(jq -r '.users[0].uuid'<<<"$row")" "$password" "$host" "$port" "$label" ;;
+  vless) public=$(rs_state_get ".singbox.instances[\"$tag\"].public_key"); [[ $public =~ ^[A-Za-z0-9_-]{32,64}$ ]] || { rs_die 'Reality public key is unavailable for this instance'; return 1; }; sid=$(jq -r '.tls.reality.short_id[0]'<<<"$row"); sni=$(jq -r '.tls.server_name'<<<"$row"|rs_sb_urlencode); printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s#%s\n' "$(jq -r '.users[0].uuid'<<<"$row")" "$host" "$port" "$sni" "$public" "$sid" "$label" ;;
+  anytls) public=$(rs_state_get ".singbox.instances[\"$tag\"].public_key"); [[ $public =~ ^[A-Za-z0-9_-]{32,64}$ ]] || { rs_die 'Reality public key is unavailable for this instance'; return 1; }; sid=$(jq -r '.tls.reality.short_id[0]'<<<"$row"); password=$(jq -r '.users[0].password'<<<"$row"|rs_sb_urlencode); sni=$(jq -r '.tls.server_name'<<<"$row"|rs_sb_urlencode); printf 'anytls://%s@%s:%s/?security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s#%s\n' "$password" "$host" "$port" "$sni" "$public" "$sid" "$label" ;;
  esac
 }
