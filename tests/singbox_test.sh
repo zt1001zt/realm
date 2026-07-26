@@ -7,12 +7,11 @@ make_root; trap cleanup_root EXIT
 export RS_STATE_DIR="$RS_ROOT/etc/rs-manager" RS_BACKUP_DIR="$RS_ROOT/backups" RS_SINGBOX_CONFIG="$RS_ROOT/etc/sing-box/config.json" RS_SINGBOX_CERT_DIR="$RS_ROOT/etc/sing-box/certs" RS_REALM_CONFIG="$RS_ROOT/root/.realm/config.toml"
 mkdir -p "$RS_ROOT/test-bin" "$(dirname "$RS_REALM_CONFIG")"
 missing_output=''; missing_rc=0
-missing_output=$( (
-  export PATH=/usr/bin:/bin
-  source "$DIR/lib/core/common.sh"
-  source "$DIR/lib/modules/singbox.sh"
+missing_output=$(env PATH=/usr/bin:/bin bash -c '
+  source "$1/lib/core/common.sh"
+  source "$1/lib/modules/singbox.sh"
   rs_sb_reality_keypair
- ) 2>&1 ) || missing_rc=$?
+' _ "$DIR" 2>&1) || missing_rc=$?
 assert_eq "$missing_rc" 1
 assert_true grep -Fq 'sing-box is not installed; run: rs service install sing-box' <<<"$missing_output"
 cat > "$RS_ROOT/test-bin/sing-box" <<'EOF'
