@@ -19,6 +19,11 @@ key=${2%%=*}
 case " ${RS_TUNE_TEST_UNSUPPORTED:-} " in *" $key "*) exit 1;; esac
 case ${1:-} in
  -n)
+  if [[ ${RS_TUNE_TEST_DISAPPEAR:-0} == 1 && $key == net.ipv4.tcp_congestion_control ]]; then
+   count=$(cat "${RS_TUNE_TEST_READ_COUNT:?}" 2>/dev/null || printf 0)
+   count=$((count+1)); printf '%s\n' "$count" >"$RS_TUNE_TEST_READ_COUNT"
+   ((count<3)) || exit 1
+  fi
   case $key in
    net.ipv4.tcp_available_congestion_control)printf '%s\n' 'cubic bbr';;
    net.ipv4.tcp_congestion_control)printf '%s\n' 'bbr';;
@@ -49,6 +54,12 @@ printf '%s\n' sentinel >"$RS_SYSCTL_FILE"
 export RS_TUNE_TEST_UNSUPPORTED='net.ipv4.tcp_congestion_control'
 assert_false rs_tune_apply standard
 assert_eq "$(cat "$RS_SYSCTL_FILE")" sentinel
+export RS_TUNE_TEST_UNSUPPORTED='' RS_TUNE_TEST_DISAPPEAR=1 RS_TUNE_TEST_READ_COUNT="$RS_ROOT/read-count"
+rs_state_set '.tuning.profile' ''
+rm -f "$RS_TUNE_TEST_READ_COUNT"
+assert_false rs_tune_apply standard
+assert_eq "$(rs_state_get '.tuning.profile' 2>/dev/null || true)" ''
+export RS_TUNE_TEST_DISAPPEAR=0
 mkdir -p "$RS_STATE_DIR"
 printf 'sysctl\tnet.core.default_qdisc\tfq\nsysctl\tnet.ipv4.tcp_keepalive_time\t120\n' >"$(rs_tune_runtime_file)"
 export RS_TUNE_TEST_UNSUPPORTED='net.core.default_qdisc'

@@ -64,11 +64,15 @@ mkdir -p "$stage_lib"
 cp -R "$SOURCE_DIR/lib" "$SOURCE_DIR/bin" "$stage_lib/"
 cp "$SOURCE_DIR/realm.sh" "$stage_lib/realm.sh"
 cp "$SOURCE_DIR/THIRD_PARTY_NOTICES.md" "$stage_lib/"
-printf '%s\n' RS_MANAGER_INSTALL_V1 >"$stage_lib/.rs-manager-install"
 chmod +x "$stage_lib/bin/rs"
 printf '#!/usr/bin/env bash\nRS_LIB_DIR=%q exec bash %q "$@"\n' "$LIB" "$LIB/bin/rs" >"$stage_rs"
 printf '#!/usr/bin/env bash\nRS_LIB_DIR=%q exec bash %q singbox "${1:-menu}" "${@:2}"\n' "$LIB" "$LIB/bin/rs" >"$stage_sb"
 chmod +x "$stage_rs" "$stage_sb"
+{
+  printf '%s\n' RS_MANAGER_INSTALL_V1
+  printf 'rs_sha256=%s\n' "$(sha256sum "$stage_rs" | awk '{print $1}')"
+  printf 'sb_sha256=%s\n' "$(sha256sum "$stage_sb" | awk '{print $1}')"
+} >"$stage_lib/.rs-manager-install"
 
 bash -n "$stage_lib/bin/rs" "$stage_rs" "$stage_sb"
 RS_LIB_DIR="$stage_lib" bash "$stage_lib/bin/rs" --help >/dev/null

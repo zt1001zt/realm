@@ -69,13 +69,15 @@ assert_true grep -Eq 'ss://[^@]+@198\.51\.100\.20:23456#' <<<"$view_output"
 manual_host_output=$(printf '1\n1\nmanual.example.com\n0\n0\n' | PATH="$RS_ROOT/menu-bin:/usr/bin:/bin" RS_SB_DISABLE_HOST_DETECT=1 bash "$DIR/bin/rs" singbox menu)
 assert_true grep -q '@manual\.example\.com:23456#' <<<"$manual_host_output"
 prefix="$RS_ROOT/install"; RS_PREFIX="$prefix" RS_SKIP_DEPS=1 bash "$DIR/install.sh"; assert_true test -x "$prefix/bin/rs"; assert_true test -x "$prefix/bin/sb"
-assert_eq "$(cat "$prefix/lib/rs-manager/.rs-manager-install" 2>/dev/null || true)" RS_MANAGER_INSTALL_V1
+assert_eq "$(sed -n '1p' "$prefix/lib/rs-manager/.rs-manager-install" 2>/dev/null || true)" RS_MANAGER_INSTALL_V1
 mkdir -p "$RS_ROOT/etc/sing-box" "$RS_ROOT/root/.realm" "$RS_ROOT/etc/rs-manager" "$RS_ROOT/backups" "$(dirname "$RS_SYSCTL_FILE")"
 printf keep >"$RS_ROOT/etc/sing-box/config.json"
 printf keep >"$RS_ROOT/root/.realm/config.toml"
 printf keep >"$RS_ROOT/etc/rs-manager/state.json"
 printf keep >"$RS_ROOT/backups/keep"
 printf keep >"$RS_SYSCTL_FILE"
+printf 'n\n' | RS_PREFIX="$prefix" RS_ROOT="$RS_ROOT" "$prefix/bin/rs" manager uninstall >/dev/null || true
+assert_true test -x "$prefix/bin/rs"
 printf '7\ny\n' | RS_PREFIX="$prefix" RS_ROOT="$RS_ROOT" "$prefix/bin/rs" >/dev/null
 assert_false test -e "$prefix/bin/rs"
 assert_false test -e "$prefix/bin/sb"
@@ -90,10 +92,17 @@ mkdir -p "$unsafe_prefix/bin" "$unsafe_prefix/lib/rs-manager"
 printf '#!/usr/bin/env bash\n' >"$unsafe_prefix/bin/rs"
 printf '#!/usr/bin/env bash\n' >"$unsafe_prefix/bin/sb"
 printf wrong >"$unsafe_prefix/lib/rs-manager/.rs-manager-install"
-assert_false env RS_PREFIX="$unsafe_prefix" bash "$DIR/bin/rs" manager uninstall
+assert_false bash -c 'printf "y\n" | env RS_PREFIX="$1" bash "$2/bin/rs" manager uninstall' _ "$unsafe_prefix" "$DIR"
 assert_true test -e "$unsafe_prefix/bin/rs"
 assert_true test -e "$unsafe_prefix/bin/sb"
 assert_true test -e "$unsafe_prefix/lib/rs-manager"
+tamper_prefix="$RS_ROOT/tamper-install"
+RS_PREFIX="$tamper_prefix" RS_SKIP_DEPS=1 bash "$DIR/install.sh"
+printf '#!/usr/bin/env bash\n# %s/lib/rs-manager\n' "$tamper_prefix" >"$tamper_prefix/bin/rs"
+chmod +x "$tamper_prefix/bin/rs"
+assert_false bash -c 'printf "y\n" | env RS_PREFIX="$1" bash "$2/bin/rs" manager uninstall' _ "$tamper_prefix" "$DIR"
+assert_true test -e "$tamper_prefix/bin/rs"
+assert_true test -e "$tamper_prefix/lib/rs-manager"
 RS_PREFIX="$prefix" RS_SKIP_DEPS=1 bash "$DIR/install.sh"
 printf '%s\n' old-library >"$prefix/lib/rs-manager/old-marker"; printf '#!/usr/bin/env bash\necho old-wrapper\n' >"$prefix/bin/rs"; chmod +x "$prefix/bin/rs"
 old_wrapper=$(sha256sum "$prefix/bin/rs" | awk '{print $1}')

@@ -22,7 +22,7 @@ singbox_cmd(){ local action=${1:-menu}; shift||true; rs_sb_migrate; case $action
 realm_cmd(){ local action=${1:-menu};shift||true;rs_realm_migrate;case $action in list)rs_realm_list;;add)rs_realm_add "${1:?id}" "${2:?listen}" "${3:?host:port}";;edit)rs_realm_edit "${1:?id}" "${2:?listen}" "${3:?host:port}";;delete)rs_realm_delete "${1:?id}";;range)rs_realm_add_range "${1:?start}" "${2:?end}" "${3:?host}" "${4:?remote-start}";;disable)rs_realm_toggle "${1:?id}" disabled;;enable)rs_realm_toggle "${1:?id}" enabled;;menu)realm_menu;;*)usage;return 1;;esac; }
 tune_cmd(){ local action=${1:-status};shift||true;case $action in status)rs_tune_status;;preview)rs_tune_preview "${1:-standard}";;apply)rs_tune_apply "${1:-standard}";;realm)rs_tune_realm;;restore)rs_tune_restore;;*)usage;return 1;;esac; }
 service_cmd(){ local action=${1:?action} component=${2:?component} item; [[ $component == sing-box || $component == realm || $component == all ]] || return 1; [[ -n ${RS_INIT_SYSTEM:-} ]] || rs_detect_platform || return 1; if [[ $component == all ]]; then for item in sing-box realm; do rs_component_action "$action" "$item" || return 1; done; else rs_component_action "$action" "$component"; fi; }
-manager_cmd(){ case ${1:-} in uninstall)rs_manager_uninstall "${RS_PREFIX:-/usr/local}";;*)usage;return 1;;esac; }
+manager_cmd(){ case ${1:-} in uninstall)manager_uninstall_menu;;*)usage;return 1;;esac; }
 menu_ensure_component(){
  local component=$1 label=$2 answer
  command -v "$component" >/dev/null 2>&1 && return 0

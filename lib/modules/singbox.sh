@@ -42,7 +42,7 @@ rs_sb_ensure_certificate(){
  chmod 600 "$key_tmp"; chmod 644 "$cert_tmp"; mv "$key_tmp" "$key"; mv "$cert_tmp" "$cert"
 }
 rs_sb_validate(){ jq -e '.inbounds and (.inbounds|type=="array")' "$1" >/dev/null || return 1; if command -v sing-box >/dev/null 2>&1 && [[ ${RS_TEST_MODE:-0} != 1 ]]; then sing-box check -c "$1" >/dev/null; fi; }
-rs_sb_post_apply(){ rs_service_reload_and_check sing-box; }
+rs_sb_post_apply(){ rs_service_reload_and_check sing-box >&2; }
 rs_sb_ensure(){ mkdir -p "$(dirname "$RS_SINGBOX_CONFIG")"; [[ -s $RS_SINGBOX_CONFIG ]] || printf '%s\n' '{"log":{"level":"info","timestamp":true},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct-out"}]}' > "$RS_SINGBOX_CONFIG"; }
 rs_sb_build(){
  local type=$1 tag=$2 port=$3 pass uuid private='' public='' short cert_dir cert key; pass=$(rs_sb_password); uuid=$(rs_sb_uuid); short=$(rs_random_hex 4); cert_dir=${RS_SINGBOX_CERT_DIR:-$(rs_path /etc/sing-box/certs)}; cert="$cert_dir/fullchain.pem"; key="$cert_dir/privkey.pem"
@@ -82,6 +82,21 @@ _rs_sb_migrate(){
 }
 rs_sb_migrate(){ rs_locked_call _rs_sb_migrate "$@"; }
 rs_sb_urlencode(){ local value; value=$(tr -d '\r\n'); printf '%s' "$value" | jq -sRr @uri | tr -d '\r\n'; }
+rs_sb_validate_ipv6(){
+ local host=$1 left right item count=0 compressed=0
+ [[ $host == *:* && $host =~ ^[0-9A-Fa-f:]+$ && $host != *:::* ]] || return 1
+ if [[ $host == *::* ]]; then
+  compressed=1; left=${host%%::*}; right=${host#*::}; [[ $right != *::* ]] || return 1
+  if [[ -n $left ]]; then IFS=: read -r -a parts <<<"$left"; for item in "${parts[@]}"; do [[ $item =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; count=$((count+1)); done; fi
+  if [[ -n $right ]]; then IFS=: read -r -a parts <<<"$right"; for item in "${parts[@]}"; do [[ $item =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; count=$((count+1)); done; fi
+  ((count<8))
+ else
+  [[ $host != :* && $host != *: ]] || return 1
+  IFS=: read -r -a parts <<<"$host"; ((${#parts[@]}==8)) || return 1
+  for item in "${parts[@]}"; do [[ $item =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; done
+ fi
+ [[ $compressed == 1 || ${#parts[@]} == 8 ]]
+}
 rs_sb_validate_host(){
  local host=${1:-} part n
  host=${host#[}; host=${host%]}
@@ -92,8 +107,7 @@ rs_sb_validate_host(){
   return 0
  fi
  if [[ $host == *:* ]]; then
-  [[ $host =~ ^[0-9A-Fa-f:]+$ && $host != : && $host != :::* ]] || return 1
-  return 0
+  rs_sb_validate_ipv6 "$host"; return
  fi
  [[ ${#host} -le 253 && $host =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && $host == *.* ]] || return 1
  local label
@@ -101,20 +115,24 @@ rs_sb_validate_host(){
  for label in "${labels[@]}"; do [[ -n $label && ${#label} -le 63 && $label != -* && $label != *- ]] || return 1; done
 }
 rs_sb_host_public(){
- local host a b
+ local host a b c d
  host=${1#[}; host=${host%]}
  rs_sb_validate_host "$host" || return 1
- if [[ $host =~ ^([0-9]+)\.([0-9]+)\. ]]; then
-  a=${BASH_REMATCH[1]}; b=${BASH_REMATCH[2]}
+ if [[ $host == *.* ]]; then
+  IFS=. read -r a b c d <<<"$host"
   ((a!=0 && a!=10 && a!=127 && a<224)) || return 1
   ! ((a==100 && b>=64 && b<=127)) || return 1
   ! ((a==169 && b==254)) || return 1
   ! ((a==172 && b>=16 && b<=31)) || return 1
   ! ((a==192 && b==168)) || return 1
+  ! ((a==192 && b==0 && (c==0 || c==2))) || return 1
+  ! ((a==198 && (b==18 || b==19))) || return 1
+  ! ((a==198 && b==51 && c==100)) || return 1
+  ! ((a==203 && b==0 && c==113)) || return 1
   return 0
  fi
  local lower=${host,,}
- [[ $lower != :: && $lower != ::1 && $lower != fe8* && $lower != fe9* && $lower != fea* && $lower != feb* && $lower != fc* && $lower != fd* ]]
+ [[ $lower != :: && $lower != ::1 && ! $lower =~ ^(0*:){7}0*1$ && $lower != fe8* && $lower != fe9* && $lower != fea* && $lower != feb* && $lower != fc* && $lower != fd* && $lower != ff* && $lower != 2001:db8:* ]]
 }
 rs_sb_uri_host(){ local host=${1#[}; host=${host%]}; rs_sb_validate_host "$host" || return 1; if [[ $host == *:* ]]; then printf '[%s]\n' "$host"; else printf '%s\n' "$host"; fi; }
 rs_sb_detect_host(){

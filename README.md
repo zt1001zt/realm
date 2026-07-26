@@ -5,16 +5,16 @@ RS Manager 把 Realm 转发、Sing-box 多协议实例和可恢复的 BBR/TCP �
 ## 一键安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zt1001zt/realm/v1.0.2/rs-manager.sh | sh
+curl -fsSL https://raw.githubusercontent.com/zt1001zt/realm/v1.0.4/rs-manager.sh | sh
 ```
 
 Alpine（默认自带 BusyBox `wget`）也可以使用：
 
 ```sh
-wget -qO- https://raw.githubusercontent.com/zt1001zt/realm/v1.0.2/rs-manager.sh | sh
+wget -qO- https://raw.githubusercontent.com/zt1001zt/realm/v1.0.4/rs-manager.sh | sh
 ```
 
-引导脚本只下载固定的 `v1.0.2` Release 包，并使用脚本内置的独立 SHA-256 摘要校验；摘要不匹配时会直接终止，不会覆盖现有安装。
+引导脚本只下载固定的 `v1.0.4` Release 包，并使用脚本内置的独立 SHA-256 摘要校验；摘要不匹配时会直接终止，不会覆盖现有安装。
 
 脚本安装后会进入菜单。首次使用可选择 `Services` → `install/upgrade all`，或执行 `rs service install all`，安装经过固定 SHA-256 校验的 Sing-box 与 Realm 官方二进制及 systemd/OpenRC 服务。已有二进制、配置和服务文件在变更前会备份，启动或健康检查失败会回滚。
 
@@ -32,15 +32,17 @@ rs --help          # 查看非交互命令
 
 当在 Sing-box 菜单中添加或克隆入站而系统尚未安装 `sing-box` 时，菜单会先显示 `未安装 Sing-box，是否立即安装？ [Y/n]`。仅在确认（默认 `Y`）后才会下载并安装受 SHA-256 校验的依赖；选择拒绝或安装失败会取消当前操作，不会继续读取入站参数或创建配置。非交互式 CLI 不会自动安装依赖，可先运行 `rs service install sing-box`。
 
-在主菜单选择 **BBR/TCP 智能调优** 后，选择“智能一键调优”会先显示内核、BBR 可用性、内存、文件描述符限制以及将写入的标准 BBR/TCP 参数预览。预览完成后只有输入 `y` 或 `Y` 才会应用调优；其他输入不会修改系统。选择“恢复原始配置”会移除管理器的调优并恢复其保存的原始 sysctl 和运行时设置。
+添加入站时通过数字选择 Shadowsocks、Hysteria2、TUIC、VLESS Reality 或 AnyTLS Reality，同一种协议可重复添加。创建成功后脚本自动检测服务器的公网 IPv4/IPv6；检测失败时可手工输入域名或 IP，并立即输出可直接导入代理客户端的 `ss://`、`hy2://`、`tuic://`、`vless://` 或 `anytls://` 分享链接。“查看配置与分享链接”可按编号选择任一实例，查看名称、协议、Tag、端口、SNI/Reality 信息和分享链接。
+
+在主菜单选择 **BBR/TCP 智能调优** 后，选择“智能一键调优”会先显示内核、BBR 可用性、内存、文件描述符限制以及将写入的标准 BBR/TCP 参数预览。脚本逐项检测 sysctl 能力，当前容器或 VPS 系统不支持的参数会明确列出并跳过，不再把未知键写入持久化文件。BBR 关键能力不可用或不可写时停止操作，不会显示调优成功。预览完成后只有输入 `y` 或 `Y` 才会应用调优；其他输入不会修改系统。选择“恢复原始配置”会移除管理器的调优并恢复其保存的原始 sysctl 和运行时设置。
 ## 主要能力
 
-- 首次没有选择的 SS、Hysteria2、TUIC、VLESS Reality、AnyTLS Reality，可在安装后继续添加。
+- 支持 SS、Hysteria2、TUIC、VLESS Reality、AnyTLS Reality，安装后可随时继续添加。
 - 同一种协议可创建多个独立实例，使用唯一 Tag、端口和凭据。
 - 修改配置时保留已有 DNS、路由、出站和未知自定义字段。
 - Realm 支持稳定 ID 的添加、编辑、启停、删除和连续端口段。
 - 可安装、升级、启动、停止、重启并检查 Sing-box/Realm 服务。
-- BBR/`fq` 提供低内存、标准、高带宽三档配置；只写入管理器自己的 sysctl 文件并可恢复。
+- BBR/`fq` 提供低内存、标准、高带宽三档配置；只写入当前系统支持的参数和管理器自己的 sysctl 文件，并可恢复。
 - 支持 Debian/Ubuntu、CentOS/RHEL/Rocky/AlmaLinux 和 Alpine，兼容 systemd 与 OpenRC。
 - 配置修改前自动备份，候选配置校验后原子替换。
 
@@ -69,7 +71,13 @@ RS Manager 直接读取 `/etc/sing-box/config.json` 和 `/root/.realm/config.tom
 
 ## 卸载
 
-删除 RS Manager 默认不会删除 Sing-box、Realm、证书或原生配置。服务卸载仍可通过原 Realm 管理入口或发行版包管理器单独执行。
+主菜单选择 **一键卸载 RS Manager**，二次确认后只会删除 RS Manager 的 `rs`、`sb` 包装器和管理器程序目录。Sing-box、Realm、服务、证书、原生配置、RS Manager 状态、备份及已经应用的 sysctl 调优全部保留。也可以非交互执行：
+
+```bash
+rs manager uninstall
+```
+
+卸载器会验证安装所有权标记；无法确认文件属于 RS Manager 时拒绝删除。
 
 ---
 

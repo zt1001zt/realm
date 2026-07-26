@@ -56,6 +56,7 @@ rs_tune_candidate(){
  if ! rs_tune_render "$profile" "$realm" >"$template" || ! rs_tune_filter_supported "$template" "$candidate" "$skipped"; then rm -f "$template"; return 1; fi
  rm -f "$template"
 }
+rs_tune_candidate_has_bbr(){ grep -q '^net\.ipv4\.tcp_congestion_control = bbr$' "$1"; }
 rs_tune_preview(){
  local tmp skipped; tmp=$(mktemp); skipped=$(mktemp)
  rs_tune_candidate "$1" "$tmp" "$skipped" || { rm -f "$tmp" "$skipped"; return 1; }
@@ -125,6 +126,7 @@ rs_tune_post_apply(){
 _rs_tune_apply(){
  local profile=$1 tmp skipped key; rs_tune_buffer "$profile" >/dev/null || return 1; rs_tune_check_support || return 1; rs_tune_prepare_original || return 1
  tmp=$(mktemp); skipped=$(mktemp); rs_tune_candidate "$profile" "$tmp" "$skipped" || { rm -f "$tmp" "$skipped"; return 1; }
+ if ! rs_tune_candidate_has_bbr "$tmp"; then rm -f "$tmp" "$skipped"; rs_die 'BBR 关键参数在应用前变为不可用'; return 1; fi
  while IFS= read -r key; do [[ -n $key ]] && rs_warn "系统不支持，已跳过：$key"; done <"$skipped"
  if ! rs_transaction_apply "$tmp" "$RS_SYSCTL_FILE" rs_tune_validate rs_tune_post_apply >/dev/null; then rm -f "$tmp" "$skipped"; rs_tune_restore_runtime; return 1; fi
  rm -f "$tmp" "$skipped"; rs_state_set '.tuning.profile' "$profile"
@@ -133,6 +135,7 @@ rs_tune_apply(){ rs_locked_call _rs_tune_apply "$@"; }
 _rs_tune_realm(){
  local profile tmp skipped key; profile=$(rs_state_get '.tuning.profile' 2>/dev/null || true); [[ -n $profile ]] || profile=realm; [[ $profile == realm ]] || rs_tune_check_support || return 1; rs_tune_prepare_original || return 1
  tmp=$(mktemp); skipped=$(mktemp); rs_tune_candidate "$profile" "$tmp" "$skipped" true || { rm -f "$tmp" "$skipped"; return 1; }
+ if [[ $profile != realm ]] && ! rs_tune_candidate_has_bbr "$tmp"; then rm -f "$tmp" "$skipped"; rs_die 'BBR 关键参数在应用前变为不可用'; return 1; fi
  while IFS= read -r key; do [[ -n $key ]] && rs_warn "系统不支持，已跳过：$key"; done <"$skipped"
  if ! rs_transaction_apply "$tmp" "$RS_SYSCTL_FILE" rs_tune_validate rs_tune_post_apply >/dev/null; then rm -f "$tmp" "$skipped"; rs_tune_restore_runtime; return 1; fi
  rm -f "$tmp" "$skipped"; rs_state_set_json '.tuning.realm' true

@@ -10,6 +10,10 @@ assert_true grep -q 'RS_MANAGER_INSTALL_V1' "$DIR/install.sh"
 assert_true grep -q 'releases/download/$REF/rs-manager-$VERSION.tar.gz' "$DIR/rs-manager.sh"
 assert_true test -f "$DIR/scripts/build-release-bundle.sh"
 release_version=$(sed -n 's/^VERSION=//p' "$DIR/rs-manager.sh")
+assert_eq "$release_version" 1.0.4
+assert_true grep -q 'v1.0.4/rs-manager.sh' "$DIR/README.md"
+assert_true grep -q '一键卸载 RS Manager' "$DIR/README.md"
+assert_true grep -q '系统不支持.*跳过' "$DIR/README.md"
 
 while read -r expected entry; do
   path=${entry#\*}
@@ -36,8 +40,10 @@ if [[ -f $DIR/scripts/build-release-bundle.sh ]]; then
   assert_true bash "$DIR/scripts/build-release-bundle.sh" "$release_version" "$RS_ROOT/two.tar.gz"
   assert_eq "$(sha256sum "$RS_ROOT/one.tar.gz" | awk '{print $1}')" "$(sha256sum "$RS_ROOT/two.tar.gz" | awk '{print $1}')"
   expected=$(sed -n 's/^EXPECTED_SHA256=//p' "$DIR/rs-manager.sh")
+  actual=$(sha256sum "$RS_ROOT/one.tar.gz" | awk '{print $1}')
   assert_eq 64 "${#expected}"
   assert_false grep -q '[^0-9a-f]' <<<"$expected"
+  assert_eq "$actual" "$expected"
   bundle_has_bootstrap(){ tar -tzf "$1" | grep -q '/rs-manager.sh$'; }
   assert_false bundle_has_bootstrap "$RS_ROOT/one.tar.gz"
 fi

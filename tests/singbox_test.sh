@@ -69,16 +69,25 @@ assert_true rs_sb_validate_host example.com
 assert_true rs_sb_validate_host 8.8.8.8
 assert_true rs_sb_validate_host 2001:4860:4860::8888
 assert_false rs_sb_validate_host 'bad host'
+assert_false rs_sb_validate_host '1::2::3'
+assert_false rs_sb_validate_host 'abcd:'
+assert_false rs_sb_host_public 192.0.2.1
+assert_false rs_sb_host_public 198.51.100.20
+assert_false rs_sb_host_public 203.0.113.10
+assert_false rs_sb_host_public ff02::1
 assert_eq "$(rs_sb_uri_host '2001:4860:4860::8888')" '[2001:4860:4860::8888]'
 sslink=$(rs_sb_link legacy-ss 2001:4860:4860::8888)
 assert_true grep -Eq '^ss://[^@]+@\[2001:4860:4860::8888\]:12000#' <<<"$sslink"
 ss_user=${sslink#ss://}; ss_user=${ss_user%%@*}
 assert_false grep -q '[+/=]' <<<"$ss_user"
 assert_true grep -Eq '^hy2://.+@example\.com:13000/' <<<"$hlink"
+assert_true grep -q 'insecure=1' <<<"$hlink"
 tlink=$(rs_sb_link "$tu" example.com)
 assert_true grep -Eq '^tuic://[^:]+:.+@example\.com:15001/' <<<"$tlink"
+assert_true grep -q 'congestion_control=bbr&insecure=1' <<<"$tlink"
 alink=$(rs_sb_link "$at" example.com)
-assert_true grep -q '^anytls://.*pbk=TEST_PUBLIC_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456' <<<"$alink"
+assert_true grep -q '^anytls://.*@example\.com:15002/.*security=reality.*pbk=TEST_PUBLIC_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456.*sid=' <<<"$alink"
+assert_true grep -q '^vless://.*@example\.com:14000?encryption=none.*security=reality.*pbk=TEST_PUBLIC_KEY_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456.*sid=' <<<"$vlink"
 assert_false rs_sb_link "$hy" 'bad host'
 detail=$(rs_sb_detail "$vl")
 assert_true grep -Fq $'name\treality-main' <<<"$detail"
@@ -103,10 +112,13 @@ printf '#!/sbin/openrc-run\n' >"$RS_ROOT/etc/init.d/sing-box"; chmod +x "$RS_ROO
 cat >"$RS_ROOT/test-bin/rc-service" <<EOF
 #!/usr/bin/env sh
 printf '%s\n' "\$*" >>'$RS_ROOT/rc.log'
+printf '%s\n' 'service status output'
 EOF
 chmod +x "$RS_ROOT/test-bin/rc-service"
 rs_sb_password(){ [[ -d $RS_LOCK_DIR ]] && : >"$RS_ROOT/lock-seen"; printf '%s\n' test-password; }
-RS_TEST_MODE=0 rs_sb_add shadowsocks alpine-live 18000 >/dev/null
+alpine_tag=$(RS_TEST_MODE=0 rs_sb_add shadowsocks alpine-live 18000)
+assert_true grep -Eq '^rs-ss-[0-9a-f]{6}$' <<<"$alpine_tag"
+assert_eq "$(wc -l <<<"$alpine_tag" | tr -d ' ')" 1
 assert_true grep -q '^sing-box restart$' "$RS_ROOT/rc.log"
 assert_true test -f "$RS_ROOT/lock-seen"
 finish
