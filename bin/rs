@@ -48,7 +48,7 @@ menu_resolve_sb_host(){
  if host=$(rs_sb_detect_host 2>/dev/null); then MENU_SB_HOST=$host; printf '服务器地址：%s\n' "$host"; return 0; fi
  read -r -p '无法自动检测公网地址，请输入服务器域名或 IP: ' host
  rs_sb_validate_host "$host" || { rs_warn '服务器地址格式无效'; return 1; }
- MENU_SB_HOST=${host#[}; MENU_SB_HOST=${MENU_SB_HOST%]}
+ MENU_SB_HOST=$(rs_sb_normalize_host "$host") || return 1
 }
 menu_print_sb_link(){
  local tag=$1 uri

@@ -82,62 +82,34 @@ _rs_sb_migrate(){
 }
 rs_sb_migrate(){ rs_locked_call _rs_sb_migrate "$@"; }
 rs_sb_urlencode(){ local value; value=$(tr -d '\r\n'); printf '%s' "$value" | jq -sRr @uri | tr -d '\r\n'; }
-rs_sb_validate_ipv6(){
- local host=$1 left right item count=0 compressed=0
- [[ $host == *:* && $host =~ ^[0-9A-Fa-f:]+$ && $host != *:::* ]] || return 1
- if [[ $host == *::* ]]; then
-  compressed=1; left=${host%%::*}; right=${host#*::}; [[ $right != *::* ]] || return 1
-  if [[ -n $left ]]; then IFS=: read -r -a parts <<<"$left"; for item in "${parts[@]}"; do [[ $item =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; count=$((count+1)); done; fi
-  if [[ -n $right ]]; then IFS=: read -r -a parts <<<"$right"; for item in "${parts[@]}"; do [[ $item =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; count=$((count+1)); done; fi
-  ((count<8))
- else
-  [[ $host != :* && $host != *: ]] || return 1
-  IFS=: read -r -a parts <<<"$host"; ((${#parts[@]}==8)) || return 1
-  for item in "${parts[@]}"; do [[ $item =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1; done
- fi
- [[ $compressed == 1 || ${#parts[@]} == 8 ]]
+rs_sb_normalize_host(){
+ local host=${1:-}
+ case $host in
+  \[*\])host=${host:1:${#host}-2};;
+  *'['*|*']'*)return 1;;
+ esac
+ [[ -n $host ]] || return 1
+ printf '%s\n' "$host"
 }
+rs_sb_ip_version(){ "${RS_PYTHON3:-python3}" -c 'import ipaddress,sys; print(ipaddress.ip_address(sys.argv[1]).version)' "$1" 2>/dev/null; }
 rs_sb_validate_host(){
- local host=${1:-} part n
- host=${host#[}; host=${host%]}
+ local host label
+ host=$(rs_sb_normalize_host "${1:-}") || return 1
  [[ -n $host && $host != *[[:space:]]* ]] || return 1
- if [[ $host =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  IFS=. read -r -a parts <<<"$host"; ((${#parts[@]}==4)) || return 1
-  for part in "${parts[@]}"; do [[ $part =~ ^[0-9]{1,3}$ ]] || return 1; n=$((10#$part)); ((n<=255)) || return 1; done
-  return 0
- fi
- if [[ $host == *:* ]]; then
-  rs_sb_validate_ipv6 "$host"; return
- fi
- [[ ${#host} -le 253 && $host =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ && $host == *.* ]] || return 1
- local label
+ rs_sb_ip_version "$host" >/dev/null && return 0
+ [[ $host != *:* && ${#host} -le 253 && $host == *.* && $host =~ [A-Za-z] && $host =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || return 1
  IFS=. read -r -a labels <<<"$host"
  for label in "${labels[@]}"; do [[ -n $label && ${#label} -le 63 && $label != -* && $label != *- ]] || return 1; done
 }
 rs_sb_host_public(){
- local host a b c d
- host=${1#[}; host=${host%]}
- rs_sb_validate_host "$host" || return 1
- if [[ $host == *.* ]]; then
-  IFS=. read -r a b c d <<<"$host"
-  ((a!=0 && a!=10 && a!=127 && a<224)) || return 1
-  ! ((a==100 && b>=64 && b<=127)) || return 1
-  ! ((a==169 && b==254)) || return 1
-  ! ((a==172 && b>=16 && b<=31)) || return 1
-  ! ((a==192 && b==168)) || return 1
-  ! ((a==192 && b==0 && (c==0 || c==2))) || return 1
-  ! ((a==198 && (b==18 || b==19))) || return 1
-  ! ((a==198 && b==51 && c==100)) || return 1
-  ! ((a==203 && b==0 && c==113)) || return 1
-  return 0
- fi
- local lower=${host,,}
- [[ $lower != :: && $lower != ::1 && ! $lower =~ ^(0*:){7}0*1$ && $lower != fe8* && $lower != fe9* && $lower != fea* && $lower != feb* && $lower != fc* && $lower != fd* && $lower != ff* && $lower != 2001:db8:* ]]
+ local host
+ host=$(rs_sb_normalize_host "${1:-}") || return 1
+ "${RS_PYTHON3:-python3}" -c 'import ipaddress,sys; value=ipaddress.ip_address(sys.argv[1]); raise SystemExit(0 if value.is_global and not value.is_multicast else 1)' "$host" 2>/dev/null
 }
-rs_sb_uri_host(){ local host=${1#[}; host=${host%]}; rs_sb_validate_host "$host" || return 1; if [[ $host == *:* ]]; then printf '[%s]\n' "$host"; else printf '%s\n' "$host"; fi; }
+rs_sb_uri_host(){ local host; rs_sb_validate_host "${1:-}" || return 1; host=$(rs_sb_normalize_host "$1") || return 1; if [[ $host == *:* ]]; then printf '[%s]\n' "$host"; else printf '%s\n' "$host"; fi; }
 rs_sb_detect_host(){
  local line host service
- if [[ -n ${RS_SB_HOST_OVERRIDE:-} ]]; then rs_sb_validate_host "$RS_SB_HOST_OVERRIDE" && printf '%s\n' "${RS_SB_HOST_OVERRIDE#[}" | sed 's/]$//'; return; fi
+ if [[ -n ${RS_SB_HOST_OVERRIDE:-} ]]; then rs_sb_validate_host "$RS_SB_HOST_OVERRIDE" && rs_sb_normalize_host "$RS_SB_HOST_OVERRIDE"; return; fi
  [[ ${RS_SB_DISABLE_HOST_DETECT:-0} != 1 ]] || return 1
  while IFS= read -r line; do host=$(awk '{print $4}' <<<"$line"); host=${host%%/*}; if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi; done < <(ip -o -4 addr show scope global 2>/dev/null || true)
  while IFS= read -r line; do host=$(awk '{print $4}' <<<"$line"); host=${host%%/*}; if rs_sb_host_public "$host"; then printf '%s\n' "$host"; return 0; fi; done < <(ip -o -6 addr show scope global 2>/dev/null || true)
