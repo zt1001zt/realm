@@ -6,6 +6,7 @@ source "$DIR/tests/test_helper.sh"
 make_root; trap cleanup_root EXIT
 
 assert_false grep -q '[*]rs-manager.sh$' "$DIR/checksums.txt"
+assert_true grep -q 'RS_MANAGER_INSTALL_V1' "$DIR/install.sh"
 assert_true grep -q 'releases/download/$REF/rs-manager-$VERSION.tar.gz' "$DIR/rs-manager.sh"
 assert_true test -f "$DIR/scripts/build-release-bundle.sh"
 release_version=$(sed -n 's/^VERSION=//p' "$DIR/rs-manager.sh")
